@@ -1,0 +1,7 @@
+body {
+    background-color: #f8f9fa;
+}
+
+#map {
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}

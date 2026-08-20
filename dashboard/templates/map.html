@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-9">
+        <div id="map" style="height: 80vh; border-radius: 8px;"></div>
+    </div>
+    <div class="col-md-3">
+        <h5>Vessel Details</h5>
+        <div id="vessel-detail-panel" class="border rounded p-3 bg-light">
+            <p class="text-muted">Click a vessel marker to see details here.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+{% endblock %}
