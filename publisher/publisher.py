@@ -23,7 +23,7 @@ def parse_args():
 
     parser.add_argument(
         "--broker",
-        default="localhost",
+        default="10.189.224.76",
         help="MQTT broker address"
     )
 
