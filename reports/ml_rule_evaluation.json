@@ -1,0 +1,72 @@
+{
+  "records": 537978,
+  "model_flagged_records": 26899,
+  "ground_truth_records": 15995,
+  "rule_engine": {
+    "dark_period_threshold_min": 10.0,
+    "dark_check_interval_min": 5.0,
+    "event_count": 16547,
+    "per_message_flag_count": 16331,
+    "periodic_dark_sweep_event_count": 216
+  },
+  "model_rule_agreement": {
+    "records_agree": 496954,
+    "agreement_rate": 0.9237440936246464,
+    "both_flagged": 1103,
+    "ml_only": 25796,
+    "rule_only": 15228,
+    "neither_flagged": 495851
+  },
+  "label_matching_tolerance_min": 5.0,
+  "by_anomaly_type": {
+    "dark_period": {
+      "label_scenarios": 12,
+      "matched_records": 12,
+      "flagged_records": 6,
+      "detection_rate": 0.5,
+      "ml_caught_label_scenarios": 6,
+      "rule_caught_label_scenarios": 5,
+      "both_caught_label_scenarios": 3,
+      "ml_only_label_scenarios": 3,
+      "rule_only_label_scenarios": 2,
+      "neither_caught_label_scenarios": 4
+    },
+    "mmsi_duplication": {
+      "label_scenarios": 12,
+      "matched_records": 189,
+      "flagged_records": 150,
+      "detection_rate": 0.7936507936507936,
+      "ml_caught_label_scenarios": 12,
+      "rule_caught_label_scenarios": 12,
+      "both_caught_label_scenarios": 12,
+      "ml_only_label_scenarios": 0,
+      "rule_only_label_scenarios": 0,
+      "neither_caught_label_scenarios": 0
+    },
+    "position_jump": {
+      "label_scenarios": 12,
+      "matched_records": 28,
+      "flagged_records": 12,
+      "detection_rate": 0.42857142857142855,
+      "ml_caught_label_scenarios": 12,
+      "rule_caught_label_scenarios": 12,
+      "both_caught_label_scenarios": 12,
+      "ml_only_label_scenarios": 0,
+      "rule_only_label_scenarios": 0,
+      "neither_caught_label_scenarios": 0
+    },
+    "type_mismatch": {
+      "label_scenarios": 12,
+      "matched_records": 15766,
+      "flagged_records": 615,
+      "detection_rate": 0.03900799188126348,
+      "ml_caught_label_scenarios": 9,
+      "rule_caught_label_scenarios": 12,
+      "both_caught_label_scenarios": 9,
+      "ml_only_label_scenarios": 0,
+      "rule_only_label_scenarios": 3,
+      "neither_caught_label_scenarios": 0
+    }
+  },
+  "false_positive_rate": 0.05003228074477521
+}
