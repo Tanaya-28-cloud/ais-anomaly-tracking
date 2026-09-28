@@ -22,6 +22,8 @@ Run from the repository ROOT (not from inside receiver/):
 import argparse
 import json
 import math
+import os
+import uuid
 from collections import Counter
 
 import pandas as pd
@@ -118,10 +120,33 @@ def handle_message(topic: str, payload: bytes):
             )
 
 
+connect_count = 0
+
+
 def on_connect(client, userdata, flags, reason_code, properties=None):
-    print(f"Connected to broker (reason_code={reason_code}) - subscribing to both channels")
+    """Subscribe only. No reconnect / no new client in here."""
+    global connect_count
+    connect_count += 1
+    if getattr(reason_code, "is_failure", reason_code != 0):
+        print(f"[MQTT] connection REFUSED by broker: {reason_code}")
+        return
+    print(f"Connected to broker (reason_code={reason_code}, connection #{connect_count}) "
+          f"as client_id={userdata}")
+    if connect_count > 1:
+        print("[MQTT] WARNING: this is a RE-connection - see the [MQTT] DISCONNECTED line above for the cause")
     client.subscribe("ais/terrestrial")
     client.subscribe("ais/satellite")
+
+
+def on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
+    """Prints WHY the connection dropped. paho (loop_forever) then re-connects by itself."""
+    print(f"[MQTT] DISCONNECTED: reason_code={reason_code} (value={getattr(reason_code, 'value', reason_code)}) "
+          f"- 0 = we disconnected on purpose; 142 'Session taken over' = another client used the SAME client_id; "
+          f"other/unspecified = network or broker closed the socket")
+
+
+def on_subscribe(client, userdata, mid, reason_codes, properties=None):
+    print(f"[MQTT] subscribed OK: {[str(r) for r in reason_codes]}")
 
 
 def on_message(client, userdata, msg):
@@ -147,6 +172,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--broker", required=True, help="IP/hostname of the MQTT broker")
     parser.add_argument("--port", type=int, default=1883)
+    parser.add_argument("--client-id", default=None, help="override the auto-generated unique MQTT client id")
     parser.add_argument("--no-db", action="store_true", help="terminal-only mode, no PostgreSQL")
     parser.add_argument("--dark-threshold-min", type=float, default=10.0)
     parser.add_argument("--dark-sweep-min", type=float, default=5.0,
@@ -160,10 +186,26 @@ def main():
         from receiver import db_writer as _db
         db_writer = _db
 
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="ais-receiver")
+    # Unique id per process. A FIXED id ("ais-receiver") is what causes the
+    # connect/disconnect ping-pong when two processes (or two laptops) use it:
+    # the broker closes the older session every time the other one connects.
+    client_id = args.client_id or f"ais-receiver-{os.getpid()}-{uuid.uuid4().hex[:4]}"
+    # MQTT v5 so the broker can tell us the reason ("Session taken over").
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id,
+                         protocol=mqtt.MQTTv5)
+    client.user_data_set(client_id)
     client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
+    client.on_subscribe = on_subscribe
     client.on_message = on_message
-    client.connect(args.broker, args.port, 60)
+    client.reconnect_delay_set(min_delay=1, max_delay=10)
+
+    print(f"Connecting to {args.broker}:{args.port} as {client_id} ...")
+    try:
+        client.connect(args.broker, args.port, keepalive=60)   # called exactly once
+    except OSError as exc:
+        print(f"[MQTT] cannot reach broker {args.broker}:{args.port}: {exc}")
+        return
     mode = "writing to PostgreSQL" if USE_DB else "terminal only (no DB)"
     print(f"Rule receiver running - {mode}. Ctrl+C to stop.")
     try:
