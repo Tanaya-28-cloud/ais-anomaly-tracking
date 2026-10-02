@@ -9,7 +9,7 @@ from pathlib import Path
 
 import paho.mqtt.client as mqtt
 
-from .model import IsolationForestDetector
+from .model import load_detector
 from .streaming import StreamingScorer
 
 
@@ -26,7 +26,7 @@ def main() -> int:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    scorer = StreamingScorer(IsolationForestDetector.load(args.artifact))
+    scorer = StreamingScorer(load_detector(args.artifact))
     client = mqtt.Client(
         mqtt.CallbackAPIVersion.VERSION2,
         client_id="ais-ml-scorer",

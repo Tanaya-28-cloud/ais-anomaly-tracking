@@ -5,7 +5,7 @@ Put in scripts/watch_ml.py. Run from anywhere:
     python scripts/watch_ml.py --broker 127.0.0.1            # ML-flagged only
     python scripts/watch_ml.py --broker 127.0.0.1 --all      # every scored message
 
-Isolation Forest gives a score and a flag, not a reason. The "hints" below
+RBF One-Class SVM gives a score and a flag, not a reason. The "hints" below
 are simple threshold read-outs of the model's input features so you can see
 WHAT looked unusual -- they are not model-derived explanations.
 """

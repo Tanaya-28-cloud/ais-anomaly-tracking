@@ -7,14 +7,14 @@ from typing import Any
 import pandas as pd
 
 from .features import build_features
-from .model import IsolationForestDetector, MODEL_FEATURES
+from .model import MODEL_FEATURES, ScoringDetector
 from .output import build_anomaly_output
 
 
 class StreamingScorer:
     """Score MQTT records using the previous observation for each MMSI."""
 
-    def __init__(self, detector: IsolationForestDetector) -> None:
+    def __init__(self, detector: ScoringDetector) -> None:
         self.detector = detector
         self._previous: dict[int, dict[str, Any]] = {}
 
@@ -24,9 +24,14 @@ class StreamingScorer:
         current = dict(record)
         current["_stream_current"] = True
         previous = self._previous.get(mmsi)
-        rows = [previous, current] if previous is not None else [current]
+        if previous is not None:
+            previous = dict(previous)
+            previous["_stream_current"] = False
+            rows = [previous, current]
+        else:
+            rows = [current]
         feature_rows = build_features(pd.DataFrame(rows))
-        current_mask = feature_rows["_stream_current"].fillna(False).astype(bool)
+        current_mask = feature_rows["_stream_current"].astype(bool)
         current_features = feature_rows[current_mask].copy()
         scored = self.detector.score(current_features)
         row = scored.iloc[0]
@@ -38,5 +43,6 @@ class StreamingScorer:
             record,
             anomaly_score=row["anomaly_score"],
             anomaly_flag=row["ml_anomaly_flag"],
+            anomaly_source=self.detector.model_name,
             feature_values=feature_values,
         )

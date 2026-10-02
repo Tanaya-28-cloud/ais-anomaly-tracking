@@ -14,6 +14,7 @@ def build_anomaly_output(
     *,
     anomaly_score: float,
     anomaly_flag: bool,
+    anomaly_source: str = "isolation_forest",
     feature_values: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the original record plus standardized ML result fields."""
@@ -25,7 +26,7 @@ def build_anomaly_output(
             "channel": record.get("channel"),
             "anomaly_score": float(anomaly_score),
             "anomaly_flag": bool(anomaly_flag),
-            "anomaly_source": "isolation_forest",
+            "anomaly_source": anomaly_source,
             "ml_output_schema": OUTPUT_SCHEMA_VERSION,
             "feature_version": FEATURE_VERSION,
         }

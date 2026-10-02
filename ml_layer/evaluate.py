@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .evaluation import build_evaluation_report, load_labels
 from .features import build_features, load_source_data
-from .model import IsolationForestDetector
+from .model import load_detector
 
 
 def main() -> int:
@@ -23,7 +23,7 @@ def main() -> int:
     args = parser.parse_args()
 
     features = build_features(load_source_data(args.data_directory))
-    detector = IsolationForestDetector.load(args.artifact)
+    detector = load_detector(args.artifact)
     scored = detector.score(features)
     report = build_evaluation_report(
         scored,
@@ -32,6 +32,16 @@ def main() -> int:
         dark_check_interval_min=args.dark_check_interval_min,
         match_tolerance_min=args.match_tolerance_min,
     )
+    report["detector"] = {
+        "name": detector.model_name,
+        "class": type(detector).__name__,
+        "training_rows": detector.training_rows,
+        "alert_fraction": detector.alert_fraction,
+        "nu": detector.model.nu,
+        "kernel": detector.model.kernel,
+        "gamma": detector.model.gamma,
+        "score_threshold": detector.score_threshold,
+    }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))

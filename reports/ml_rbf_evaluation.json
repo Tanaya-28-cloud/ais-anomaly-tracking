@@ -1,0 +1,82 @@
+{
+  "records": 537978,
+  "model_flagged_records": 28215,
+  "ground_truth_records": 15995,
+  "rule_engine": {
+    "dark_period_threshold_min": 10.0,
+    "dark_check_interval_min": 5.0,
+    "event_count": 16547,
+    "per_message_flag_count": 16331,
+    "periodic_dark_sweep_event_count": 216
+  },
+  "model_rule_agreement": {
+    "records_agree": 496276,
+    "agreement_rate": 0.9224838190409274,
+    "both_flagged": 1422,
+    "ml_only": 26793,
+    "rule_only": 14909,
+    "neither_flagged": 494854
+  },
+  "label_matching_tolerance_min": 5.0,
+  "by_anomaly_type": {
+    "dark_period": {
+      "label_scenarios": 12,
+      "matched_records": 12,
+      "flagged_records": 8,
+      "detection_rate": 0.6666666666666666,
+      "ml_caught_label_scenarios": 8,
+      "rule_caught_label_scenarios": 5,
+      "both_caught_label_scenarios": 5,
+      "ml_only_label_scenarios": 3,
+      "rule_only_label_scenarios": 0,
+      "neither_caught_label_scenarios": 4
+    },
+    "mmsi_duplication": {
+      "label_scenarios": 12,
+      "matched_records": 189,
+      "flagged_records": 151,
+      "detection_rate": 0.798941798941799,
+      "ml_caught_label_scenarios": 12,
+      "rule_caught_label_scenarios": 12,
+      "both_caught_label_scenarios": 12,
+      "ml_only_label_scenarios": 0,
+      "rule_only_label_scenarios": 0,
+      "neither_caught_label_scenarios": 0
+    },
+    "position_jump": {
+      "label_scenarios": 12,
+      "matched_records": 28,
+      "flagged_records": 12,
+      "detection_rate": 0.42857142857142855,
+      "ml_caught_label_scenarios": 12,
+      "rule_caught_label_scenarios": 12,
+      "both_caught_label_scenarios": 12,
+      "ml_only_label_scenarios": 0,
+      "rule_only_label_scenarios": 0,
+      "neither_caught_label_scenarios": 0
+    },
+    "type_mismatch": {
+      "label_scenarios": 12,
+      "matched_records": 15766,
+      "flagged_records": 898,
+      "detection_rate": 0.0569580109095522,
+      "ml_caught_label_scenarios": 12,
+      "rule_caught_label_scenarios": 12,
+      "both_caught_label_scenarios": 12,
+      "ml_only_label_scenarios": 0,
+      "rule_only_label_scenarios": 0,
+      "neither_caught_label_scenarios": 0
+    }
+  },
+  "false_positive_rate": 0.05200552508415025,
+  "detector": {
+    "name": "rbf_one_class_svm",
+    "class": "RBFOneClassSVMDetector",
+    "training_rows": 10000,
+    "alert_fraction": 0.05,
+    "nu": 0.05,
+    "kernel": "rbf",
+    "gamma": "scale",
+    "score_threshold": 9.166226415118215e-05
+  }
+}
