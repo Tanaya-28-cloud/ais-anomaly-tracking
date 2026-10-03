@@ -1,6 +1,10 @@
 from flask import Flask
-from routes.views import views_bp
-from routes.api import api_bp
+try:
+    from dashboard.routes.views import views_bp
+    from dashboard.routes.api import api_bp
+except ModuleNotFoundError:
+    from routes.views import views_bp
+    from routes.api import api_bp
 
 
 def create_app():

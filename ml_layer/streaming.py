@@ -39,10 +39,24 @@ class StreamingScorer:
         feature_values = {
             name: row[name] for name in MODEL_FEATURES if name in row
         }
+        explanation = None
+        if bool(row["ml_anomaly_flag"]):
+            explain = getattr(self.detector, "explain", None)
+            if callable(explain):
+                try:
+                    explanation = explain(current_features)
+                except Exception as exc:
+                    explanation = {
+                        "status": "error",
+                        "method": "SHAP PermutationExplainer",
+                        "message": f"Could not explain this score: {exc}",
+                    }
         return build_anomaly_output(
             record,
             anomaly_score=row["anomaly_score"],
             anomaly_flag=row["ml_anomaly_flag"],
+            score_threshold=self.detector.score_threshold,
             anomaly_source=self.detector.model_name,
             feature_values=feature_values,
+            shap_explanation=explanation,
         )

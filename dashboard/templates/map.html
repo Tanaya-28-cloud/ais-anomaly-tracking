@@ -8,6 +8,8 @@
 <div class="row">
     <div class="col-md-9">
         <div id="map" style="height: 80vh; border-radius: 8px;"></div>
+        <div id="map-status" class="small text-muted mt-2">Connecting to vessel feed…</div>
+        <div class="small mt-1">Blue: clear · Red: rule flag · Orange: ML flag · Maroon: both</div>
     </div>
     <div class="col-md-3">
         <h5>Vessel Details</h5>
@@ -21,4 +23,4 @@
 {% block extra_scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="{{ url_for('static', filename='map.js') }}"></script>
-m{% endblock %}
+{% endblock %}

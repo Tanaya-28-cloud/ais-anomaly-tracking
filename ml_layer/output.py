@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 
-OUTPUT_SCHEMA_VERSION = "1.0"
+OUTPUT_SCHEMA_VERSION = "1.1"
 FEATURE_VERSION = "trajectory-v1"
 
 
@@ -14,8 +14,10 @@ def build_anomaly_output(
     *,
     anomaly_score: float,
     anomaly_flag: bool,
+    score_threshold: float | None = None,
     anomaly_source: str = "isolation_forest",
     feature_values: dict[str, Any] | None = None,
+    shap_explanation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the original record plus standardized ML result fields."""
     output = dict(record)
@@ -31,10 +33,14 @@ def build_anomaly_output(
             "feature_version": FEATURE_VERSION,
         }
     )
+    if score_threshold is not None:
+        output["score_threshold"] = float(score_threshold)
     if feature_values is not None:
         output["ml_features"] = {
             key: _json_value(value) for key, value in feature_values.items()
         }
+    if shap_explanation is not None:
+        output["shap_explanation"] = shap_explanation
     return {key: _json_value(value) for key, value in output.items()}
 
 

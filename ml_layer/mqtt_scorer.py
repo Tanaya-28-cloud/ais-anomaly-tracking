@@ -27,6 +27,13 @@ def main() -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     scorer = StreamingScorer(load_detector(args.artifact))
+    detector = scorer.detector
+    LOGGER.info(
+        "Active ML thresholds: model=%s kernel=rbf nu=%.4f gamma=%s "
+        "training_alert_fraction=%.2f%% saved_score_cutoff=%.10g",
+        detector.model_name, detector.model.nu, detector.model.gamma,
+        detector.alert_fraction * 100, detector.score_threshold,
+    )
     client = mqtt.Client(
         mqtt.CallbackAPIVersion.VERSION2,
         client_id="ais-ml-scorer",
@@ -44,6 +51,33 @@ def main() -> int:
         try:
             record = json.loads(message.payload.decode("utf-8"))
             result = scorer.score_record(record)
+            LOGGER.info(
+                "[ML %s] MMSI=%s channel=%s timestamp=%s location=(%s, %s) "
+                "score=%.8g cutoff=%.8g",
+                "FLAGGED" if result["anomaly_flag"] else "ok",
+                result.get("mmsi"), result.get("channel"), result.get("timestamp"),
+                result.get("LAT"), result.get("LON"), result["anomaly_score"],
+                result["score_threshold"],
+            )
+            explanation = result.get("shap_explanation")
+            if explanation and explanation.get("features"):
+                top_features = sorted(
+                    explanation["features"],
+                    key=lambda item: abs(item["shap_value"]),
+                    reverse=True,
+                )[:5]
+                LOGGER.info(
+                    "[SHAP] score=%.8g base=%.8g cutoff=%.8g additivity_residual=%.3g; top contributions: %s",
+                    explanation["score"], explanation["base_value"],
+                    explanation["score_threshold"], explanation["additivity_residual"],
+                    "; ".join(
+                        f"{item.get('label', item['name'])}={item['value']:.5g} "
+                        f"contribution={item['shap_value']:+.5g} ({item['effect']})"
+                        for item in top_features
+                    ),
+                )
+            elif explanation and explanation.get("status") == "error":
+                LOGGER.error("[SHAP] %s", explanation.get("message"))
             client.publish(args.output_topic, json.dumps(result), qos=0)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             LOGGER.exception("invalid AIS record on topic %s", message.topic)

@@ -39,6 +39,17 @@ stats = Counter()
 db_writer = None  # imported lazily so --no-db needs no psycopg2
 
 
+def print_thresholds():
+    thresholds = engine.threshold_summary()
+    print("Active receiver thresholds:")
+    print(f"  position jump: implied speed > {thresholds['position_jump_implied_speed_knots_gt']} kn")
+    print("  MMSI duplication: same MMSI, time difference < "
+          f"{thresholds['mmsi_duplication_time_seconds_lt']} s AND distance > "
+          f"{thresholds['mmsi_duplication_distance_nm_gt']} nm")
+    print(f"  dark period: silence > {thresholds['dark_period_minutes_gt']} min; sweep every {DARK_SWEEP_MIN:g} data-time min")
+    print("  identity/type mismatch: reported non-null type differs from first known non-null type (categorical; no numeric cutoff)")
+
+
 def _num(value):
     """float(value), or None for None / '' / 'nan' / NaN."""
     if value is None or value == "" or value == "nan":
@@ -84,6 +95,8 @@ def _maybe_sweep(now):
         for hit in engine.check_dark_vessels(now=now):
             stats["dark_sweep"] += 1
             print(f"[DARK-SWEEP] MMSI {hit['mmsi']} @ {hit['timestamp']} "
+                  f"location=({hit.get('lat')}, {hit.get('lon')}) "
+                  f"threshold=silence>{engine.dark_period_threshold_min:g}min "
                   f"(score {min(1.0, hit['severity']):.3f})\n    -> dark_event: {hit['detail']}")
         _last_sweep_time = now
 
@@ -97,16 +110,25 @@ def handle_message(topic: str, payload: bytes):
     stats["total"] += 1
 
     tag = f"MMSI {record['mmsi']} [{record['channel']}] @ {record['timestamp']}"
+    location = f"location=({record['lat']:.6f}, {record['lon']:.6f})"
+    thresholds = engine.threshold_summary()
+    threshold_text = (
+        f"thresholds=[jump_speed>{thresholds['position_jump_implied_speed_knots_gt']}kn; "
+        f"duplicate_dt<{thresholds['mmsi_duplication_time_seconds_lt']}s AND "
+        f"distance>{thresholds['mmsi_duplication_distance_nm_gt']}nm; "
+        f"dark_gap>{thresholds['dark_period_minutes_gt']:g}min; "
+        "identity_type_change=reported_nonnull!=first_known_nonnull]"
+    )
     if verdict["flagged"]:
         stats["flagged"] += 1
         for t in verdict["anomaly_types"]:
             stats[f"type:{t}"] += 1
-        print(f"[FLAGGED] {tag}  score={verdict['risk_score']}  "
-              f"pos=({record['lat']:.4f}, {record['lon']:.4f})")
+        print(f"[FLAGGED] {tag}  {location}  {threshold_text}  rule_score={verdict['risk_score']}")
         for d in verdict["details"]:
-            print(f"    -> {d['type']}: {d['detail']}  (severity {d['severity']:.2f})")
+            print(f"    -> {d['type']}: {d['detail']}  (severity {d['severity']:.2f}; "
+                  f"thresholds={d.get('thresholds', 'categorical comparison')})")
     else:
-        print(f"[ok]      {tag}")
+        print(f"[ok]      {tag}  {location}  {threshold_text}")
 
     if USE_DB:
         db_writer.insert_record(record)
@@ -118,6 +140,39 @@ def handle_message(topic: str, payload: bytes):
                 anomaly_type=",".join(verdict["anomaly_types"]),
                 risk_score=verdict["risk_score"],
             )
+
+
+def handle_ml_message(payload: bytes):
+    """Store the ML stream's latest result and print alert explanation details."""
+    result = json.loads(payload.decode("utf-8"))
+    if USE_DB:
+        db_writer.upsert_ml_state(result)
+    if not result.get("anomaly_flag"):
+        return
+    print(
+        f"[ML-FLAGGED] MMSI {result.get('mmsi')} [{result.get('channel')}] "
+        f"@ {result.get('timestamp')} "
+        f"location=({result.get('LAT')}, {result.get('LON')}) "
+        f"score={result.get('anomaly_score'):.8g} "
+        f"cutoff={result.get('score_threshold'):.8g}"
+    )
+    explanation = result.get("shap_explanation")
+    if explanation and explanation.get("features"):
+        top = sorted(explanation.get("features", []),
+                     key=lambda item: abs(item.get("shap_value", 0)), reverse=True)[:5]
+        print(
+            f"    SHAP score={explanation.get('score'):.8g}, "
+            f"base={explanation.get('base_value'):.8g}, "
+            f"cutoff={explanation.get('score_threshold'):.8g}, "
+            f"additivity_residual={explanation.get('additivity_residual'):.3g}"
+        )
+        for item in top:
+            print(
+                f"      {item.get('label', item['name'])}={item['value']:.5g}: "
+                f"{item['shap_value']:+.5g} ({item['effect']})"
+            )
+    elif explanation and explanation.get("status") == "error":
+        print(f"    SHAP explanation unavailable: {explanation.get('message')}")
 
 
 connect_count = 0
@@ -136,6 +191,7 @@ def on_connect(client, userdata, flags, reason_code, properties=None):
         print("[MQTT] WARNING: this is a RE-connection - see the [MQTT] DISCONNECTED line above for the cause")
     client.subscribe("ais/terrestrial")
     client.subscribe("ais/satellite")
+    client.subscribe("ais/anomalies")
 
 
 def on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
@@ -151,7 +207,10 @@ def on_subscribe(client, userdata, mid, reason_codes, properties=None):
 
 def on_message(client, userdata, msg):
     try:
-        handle_message(msg.topic, msg.payload)
+        if msg.topic == "ais/anomalies":
+            handle_ml_message(msg.payload)
+        else:
+            handle_message(msg.topic, msg.payload)
     except Exception as exc:  # keep the loop alive; show what went wrong
         stats["errors"] += 1
         print(f"[ERROR] could not process message on {msg.topic}: {exc!r}")
@@ -201,6 +260,7 @@ def main():
     client.reconnect_delay_set(min_delay=1, max_delay=10)
 
     print(f"Connecting to {args.broker}:{args.port} as {client_id} ...")
+    print_thresholds()
     try:
         client.connect(args.broker, args.port, keepalive=60)   # called exactly once
     except OSError as exc:

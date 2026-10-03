@@ -43,7 +43,9 @@ def check_speed_jump(current, previous):
         return {
             "type": "position_jump",
             "severity": min(1.0, implied_speed / 500),
-            "detail": f"Implied speed {implied_speed:.1f} kn over {dt_hours*60:.1f} min",
+            "observed": {"implied_speed_knots": implied_speed, "distance_nm": dist_nm, "elapsed_minutes": dt_hours * 60},
+            "thresholds": {"implied_speed_knots": SPEED_LIMIT_KNOTS},
+            "detail": f"Implied speed {implied_speed:.1f} kn > {SPEED_LIMIT_KNOTS} kn over {dt_hours*60:.1f} min",
         }
     return None
 
@@ -74,7 +76,9 @@ def check_mmsi_duplication(current, previous):
             return {
                 "type": "mmsi_duplication",
                 "severity": min(1.0, dist_nm / 50),
-                "detail": f"{dist_nm:.1f} nm apart within {dt_seconds:.0f}s",
+                "observed": {"distance_nm": dist_nm, "time_difference_seconds": dt_seconds},
+                "thresholds": {"distance_nm_minimum": DUPLICATION_MIN_DISTANCE_NM, "time_seconds_maximum": DUPLICATION_TIME_WINDOW_SEC},
+                "detail": f"{dist_nm:.1f} nm > {DUPLICATION_MIN_DISTANCE_NM} nm and {dt_seconds:.0f}s < {DUPLICATION_TIME_WINDOW_SEC}s",
             }
     return None
 
@@ -86,6 +90,7 @@ def check_identity_mismatch(current, known_type):
         return {
             "type": "identity_mismatch",
             "severity": 0.7,
+            "observed": {"known_type": known_type, "reported_type": current_type},
             "detail": f"Type changed from {known_type} to {current_type}",
         }
     return None
@@ -126,6 +131,14 @@ class RuleEngine:
         self.latest_sim_time = None  # tracks simulation clock, not wall clock
         self.dark_period_threshold_min = dark_period_threshold_min
 
+    def threshold_summary(self):
+        return {
+            "position_jump_implied_speed_knots_gt": SPEED_LIMIT_KNOTS,
+            "mmsi_duplication_time_seconds_lt": DUPLICATION_TIME_WINDOW_SEC,
+            "mmsi_duplication_distance_nm_gt": DUPLICATION_MIN_DISTANCE_NM,
+            "dark_period_minutes_gt": self.dark_period_threshold_min,
+        }
+
     def process(self, record):
         mmsi = record["mmsi"]
         previous = self.last_record.get(mmsi)
@@ -157,6 +170,8 @@ class RuleEngine:
                 dark_result = {
                     "type": "dark_event",
                     "severity": min(1.0, gap_min / 120),
+                    "observed": {"silence_minutes": gap_min},
+                    "thresholds": {"silence_minutes": self.dark_period_threshold_min},
                     "detail": f"No message for {gap_min:.0f} min (detected on resume)",
                 }
         results.append(dark_result)
@@ -209,6 +224,10 @@ class RuleEngine:
                     "mmsi": mmsi,
                     "type": "dark_event",
                     "severity": min(1.0, gap_min / 120),
+                    "lat": self.last_record[mmsi].get("lat"),
+                    "lon": self.last_record[mmsi].get("lon"),
+                    "observed": {"silence_minutes": gap_min},
+                    "thresholds": {"silence_minutes": self.dark_period_threshold_min},
                     "detail": f"No message for {gap_min:.0f} min",
                     "timestamp": now,
                 })

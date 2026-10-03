@@ -26,3 +26,21 @@ CREATE TABLE IF NOT EXISTS raw_ais_records (
 -- (2) "give me the latest position per vessel" — dashboard's live map
 CREATE INDEX IF NOT EXISTS idx_mmsi_timestamp ON raw_ais_records (mmsi, record_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_flagged ON raw_ais_records (flagged) WHERE flagged = TRUE;
+
+-- Latest ML score/explanation per vessel and AIS input channel. Keeping this
+-- separate from raw_ais_records preserves the independent rule and ML verdicts.
+CREATE TABLE IF NOT EXISTS ml_vessel_state (
+    mmsi             BIGINT NOT NULL,
+    channel          VARCHAR(20) NOT NULL,
+    record_timestamp TIMESTAMP NOT NULL,
+    lat              DOUBLE PRECISION NOT NULL,
+    lon              DOUBLE PRECISION NOT NULL,
+    anomaly_score    DOUBLE PRECISION NOT NULL,
+    score_threshold  DOUBLE PRECISION NOT NULL,
+    anomaly_flag     BOOLEAN NOT NULL,
+    shap_explanation JSONB,
+    updated_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (mmsi, channel)
+);
+CREATE INDEX IF NOT EXISTS idx_ml_vessel_state_timestamp
+    ON ml_vessel_state (record_timestamp DESC);

@@ -10,13 +10,15 @@ Requires: pip install psycopg2-binary
 """
 
 import os
+import json
 import psycopg2
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
 
 _conn = None
+_ml_table_ready = False
 
 
 def get_connection():
@@ -30,6 +32,72 @@ def get_connection():
             password=os.environ.get("DB_PASSWORD", ""),
         )
     return _conn
+
+
+def ensure_ml_state_table():
+    """Create the ML state table on older databases without requiring a reset."""
+    global _ml_table_ready
+    if _ml_table_ready:
+        return
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS ml_vessel_state (
+                mmsi BIGINT NOT NULL,
+                channel VARCHAR(20) NOT NULL,
+                record_timestamp TIMESTAMP NOT NULL,
+                lat DOUBLE PRECISION NOT NULL,
+                lon DOUBLE PRECISION NOT NULL,
+                anomaly_score DOUBLE PRECISION NOT NULL,
+                score_threshold DOUBLE PRECISION NOT NULL,
+                anomaly_flag BOOLEAN NOT NULL,
+                shap_explanation JSONB,
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                PRIMARY KEY (mmsi, channel)
+            )
+        """)
+    conn.commit()
+    _ml_table_ready = True
+
+
+def upsert_ml_state(result: dict):
+    """Persist the latest per-channel ML score and its local explanation."""
+    ensure_ml_state_table()
+    conn = get_connection()
+    timestamp = result.get("timestamp") or result.get("BaseDateTime")
+    if isinstance(timestamp, str):
+        timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    if timestamp.tzinfo is not None:
+        timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+    explanation = result.get("shap_explanation")
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO ml_vessel_state
+                (mmsi, channel, record_timestamp, lat, lon, anomaly_score,
+                 score_threshold, anomaly_flag, shap_explanation, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, NOW())
+            ON CONFLICT (mmsi, channel) DO UPDATE SET
+                record_timestamp = EXCLUDED.record_timestamp,
+                lat = EXCLUDED.lat,
+                lon = EXCLUDED.lon,
+                anomaly_score = EXCLUDED.anomaly_score,
+                score_threshold = EXCLUDED.score_threshold,
+                anomaly_flag = EXCLUDED.anomaly_flag,
+                shap_explanation = EXCLUDED.shap_explanation,
+                updated_at = NOW()
+            WHERE EXCLUDED.record_timestamp >= ml_vessel_state.record_timestamp
+        """, (
+            int(result.get("mmsi", result.get("MMSI"))),
+            str(result.get("channel") or "unknown"),
+            timestamp,
+            float(result.get("LAT", result.get("lat"))),
+            float(result.get("LON", result.get("lon"))),
+            float(result["anomaly_score"]),
+            float(result["score_threshold"]),
+            bool(result["anomaly_flag"]),
+            json.dumps(explanation) if explanation is not None else None,
+        ))
+    conn.commit()
 
 
 def _as_datetime(ts):

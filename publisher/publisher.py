@@ -1,6 +1,7 @@
 import argparse
 import json
 import time
+import uuid
 
 import pandas as pd
 import paho.mqtt.client as mqtt
@@ -48,13 +49,19 @@ def parse_args():
         help="Number of records to publish; 0 means all"
     )
 
+    parser.add_argument(
+        "--client-id",
+        default=None,
+        help="Optional MQTT client id. A unique id is generated when omitted."
+    )
+
     return parser.parse_args()
 
 
-def create_client():
+def create_client(client_id=None):
     client = mqtt.Client(
         mqtt.CallbackAPIVersion.VERSION2,
-        client_id="ais-publisher"
+        client_id=client_id or f"ais-publisher-{uuid.uuid4().hex[:8]}"
     )
     return client
 
@@ -72,9 +79,10 @@ def main():
         df = df.head(args.limit)
         print(f"Publishing first {len(df)} records")
 
-    client = create_client()
+    client_id = args.client_id or f"ais-publisher-{uuid.uuid4().hex[:8]}"
+    client = create_client(client_id)
 
-    print(f"Connecting to MQTT broker: {args.broker}:{args.port}")
+    print(f"Connecting to MQTT broker: {args.broker}:{args.port} as {client_id}")
 
     client.connect(args.broker, args.port, 60)
 
@@ -104,7 +112,9 @@ def main():
             print(
                 f"[{index + 1}/{len(df)}] "
                 f"MMSI={message.get('MMSI')} "
-                f"Channel={message.get('channel')}"
+                f"Channel={message.get('channel')} "
+                f"timestamp={message.get('BaseDateTime')} "
+                f"location=({message.get('LAT')}, {message.get('LON')})"
             )
 
             time.sleep(args.delay)
